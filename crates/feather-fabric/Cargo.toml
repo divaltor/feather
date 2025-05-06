@@ -1,0 +1,17 @@
+[package]
+name = "feather-fabric"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+smallvec = { workspace = true }
+anyhow = { workspace = true }
+versions = { workspace = true }
+futures-core = { workspace = true }
+bytes = { workspace = true }
+log = { workspace = true }
+fern = { workspace = true }

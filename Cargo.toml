@@ -1,0 +1,39 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+name = "feather"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[workspace.dependencies]
+feather-fabric = { path = "crates/feather-fabric" }
+
+anyhow = "1.0.98"
+clap = { version = "4.5.37", features = ["derive"] }
+directories = "6.0.0"
+indicatif = "0.17.11"
+infer = "0.19.0"
+inquire = "0.7.5"
+log = "0.4.27"
+reqwest = { version = "0.12.15", features = ["blocking", "json", "zstd", "stream"] }
+rustc-hash = "2.1.1"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+tempfile = "3.19.1"
+thiserror = "2.0.12"
+tokio = "1.44.2"
+toml = "0.8.22"
+versions = { version = "7.0.0", features = ["serde"] }
+zip = "2.6.1"
+smallvec = "1.15.0"
+futures-core = "0.3.31"
+bytes = "1.10.1"
+fern = "0.7.1"
+colored = "3.0.0"
+jiff = "0.2.12"
+flate2 = { version = "1.1.1", features = ["zlib-rs"] }
+tar = "0.4.44"
+subprocess = "0.2.9"
