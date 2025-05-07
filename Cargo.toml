@@ -12,7 +12,7 @@ license = "GPL-3.0"
 feather-fabric = { path = "crates/feather-fabric" }
 
 anyhow = "1.0.98"
-clap = { version = "4.5.37", features = ["derive"] }
+clap = { version = "4.5.37", features = ["derive", "env"] }
 directories = "6.0.0"
 indicatif = "0.17.11"
 infer = "0.19.0"

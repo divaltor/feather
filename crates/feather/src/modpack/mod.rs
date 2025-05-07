@@ -1,7 +1,7 @@
 mod modrinth;
 mod java;
 
-use std::{fs::File, io::Write, path::{Component, Path, PathBuf}, str::FromStr};
+use std::{fs::File, io::Write, path::{Path, PathBuf}, str::FromStr};
 
 use anyhow::{anyhow, Context, Result};
 use feather_fabric::FabricClient;
@@ -22,7 +22,7 @@ pub struct SetupContext {
 }
 
 pub trait Setupable {
-    async fn setup<T: AsRef<Path>>(&self, working_dir: T) -> Result<SetupContext>;
+    async fn setup<T: AsRef<Path>>(&self, working_dir: T, cache_dir: &Path) -> Result<SetupContext>;
 }
 
 fn create_eula_file(working_dir: &Path) -> Result<()> {
@@ -102,7 +102,7 @@ impl MinecraftProfile {
 }
 
 impl Setupable for MinecraftProfile {
-    async fn setup<T: AsRef<Path>>(&self, working_dir: T) -> Result<SetupContext> {
+    async fn setup<T: AsRef<Path>>(&self, working_dir: T, cache_dir: &Path) -> Result<SetupContext> {
         match &self.loader {
             Some(loader) => {
                 match &loader.name {
@@ -125,11 +125,11 @@ impl Setupable for MinecraftProfile {
         
         create_eula_file(working_dir.as_ref())?;
 
-        // TODO: Implement CacheManager to cache Java downloads.
-        let mut java_manager = JavaManager::new(None);
-        java_manager.ensure_java_present(self.required_java_version(), working_dir.as_ref()).await?;
-
-        let java_executable = java_manager.get_java_executable().ok_or(anyhow!("Failed to get Java executable"))?;
+        let mut java_manager = JavaManager::new();
+        let java_executable = java_manager.ensure_java_present(
+            self.required_java_version(), 
+            cache_dir
+        ).await?;
 
         Ok(SetupContext {
             java_executable,

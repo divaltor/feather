@@ -1,6 +1,12 @@
-use std::path::{Path, PathBuf, Component};
+use core::{arch, hash};
+use std::fs;
+use std::hash::Hasher;
+use std::os::unix::fs::symlink;
+use std::path::{Path, PathBuf};
 use anyhow::{Result, Context, anyhow};
 use flate2::bufread::GzDecoder;
+use rustc_hash::{FxBuildHasher, FxHasher};
+use tar::Archive;
 
 pub enum JavaVersion {
     Java8,
@@ -22,30 +28,41 @@ const ARCH: &str = std::env::consts::ARCH;
 const OS: &str = std::env::consts::OS;
 
 pub struct JavaManager {
-    java_path: Option<PathBuf>,
 }
 
 impl JavaManager {
-    pub fn new(java_path: Option<&Path>) -> Self {
-        Self { java_path: java_path.map(|p| p.to_path_buf()) }
+    pub fn new() -> Self {
+        Self { 
+        }
     }
 }
 
 impl JavaManager {
-    pub async fn ensure_java_present(&mut self, java_version: JavaVersion, destination_dir: &Path) -> Result<()> {
-        if let Some(path) = &self.java_path {
-            let java_bin = path.join("bin").join("java");
+    pub async fn ensure_java_present(
+        &mut self, 
+        java_version: JavaVersion, 
+        cache_root: &Path
+    ) -> Result<PathBuf> {
+        let java_version_str = java_version.to_string();
 
-            if java_bin.exists() {
-                log::info!("Found Java binary at {}", java_bin.display());
-                return Ok(());
+        // $HOME/.cache/feather/$JAVA_VERSION
+        let version_specific_path = cache_root.join(&java_version_str);
+        
+        // Check if the version-specific path is a symlink
+        if version_specific_path.is_symlink() {
+            match fs::read_link(&version_specific_path) {
+                Ok(link) => {
+                    return Ok(self.get_java_executable(&link));
+                }
+                Err(e) => {
+                    log::warn!("Failed to read symlink {}, probably does not exist: {}. Downloading and unpacking new JDK.", version_specific_path.display(), e);
+                }
             }
         }
 
-        log::info!("Java path not set. Attempting to download Java {} into {}.", java_version, destination_dir.display());
+        log::info!("Java {} not found. Will download and unpack into {}", java_version, version_specific_path.display());
 
-        // TODO: Crash if not supported, probably in main.rs?
-        let os = match OS {
+        let os_str = match OS {
             "linux" => "linux",
             "macos" => "mac",
             _ => return Err(anyhow!("Unsupported OS: {}", OS)),
@@ -54,58 +71,51 @@ impl JavaManager {
         let url = format!(
             "https://api.adoptium.net/v3/binary/latest/{feature_version}/ga/{os}/{arch}/{image_type}/hotspot/normal/eclipse",
             feature_version = java_version,
-            os = os,
+            os = os_str,
             arch = ARCH,
             image_type = "jdk"
         );
         
         log::debug!("Downloading Java installer from {}", url);
-        
+
         let response = reqwest::get(&url).await?;
-        
         response.error_for_status_ref().with_context(|| format!("Failed to download Java installer from {}", url))?;
 
         let body = response.bytes().await?;
 
-        let body_reader_find_name = std::io::Cursor::new(&body);
-        let mut first_pass_archive = tar::Archive::new(GzDecoder::new(body_reader_find_name));
-        let mut top_level_dir_name: Option<String> = None;
-
-        for entry_result in first_pass_archive.entries()? {
-            let entry = entry_result.context("Failed to read entry from Java archive")?;
-            let path = entry.path().context("Failed to get path from Java archive entry")?;
-
-            if let Some(Component::Normal(name)) = path.components().next() {
-                top_level_dir_name = Some(name.to_string_lossy().into_owned());
-                break;
-            }
-        }
-
-        let extracted_dir_name = top_level_dir_name
-            .ok_or_else(|| anyhow!("Could not find top-level directory name in Java archive"))?;
-
-        log::debug!("Identified Java JDK top-level directory as: {}", extracted_dir_name);
-
-        let body_reader_for_unpack = std::io::Cursor::new(&body);
-        let mut archive = tar::Archive::new(GzDecoder::new(body_reader_for_unpack));
-
-        log::info!("Unpacking Java JDK into {}", destination_dir.display());
-
-        archive.unpack(destination_dir)
-            .with_context(|| format!("Failed to unpack Java archive into {}", destination_dir.display()))?;
+        let cursor = std::io::Cursor::new(&body);
+        let gz_decoder = GzDecoder::new(cursor);
+        let mut archive_for_inspection = Archive::new(gz_decoder);
         
-        let final_java_path = destination_dir.join(&extracted_dir_name);
-        log::info!("Java successfully installed at: {}", final_java_path.display());
-        self.java_path = Some(final_java_path);
+        // Calculate hash of the archive to determine the JDK directory name
+        let mut hasher = FxHasher::default();
+        hasher.write(body.as_ref());
+        let hash = hasher.finish();
+        
+        let dir_name = format!("{:x}", hash);
+        let jdk_dir_name = cache_root.join(dir_name);
 
-        Ok(())
+        archive_for_inspection.unpack(&jdk_dir_name)?;
+        
+        let Some(dir) = fs::read_dir(&jdk_dir_name)?.next() else {
+            return Err(anyhow!("No JDK directory found in {}", jdk_dir_name.display()));
+        };
+
+        let actual_jdk_dir_name_str = dir.unwrap().path().display().to_string();
+
+        log::info!("Creating symlink from {} to {}", version_specific_path.display(), actual_jdk_dir_name_str);
+
+        symlink(cache_root.join(&actual_jdk_dir_name_str), &version_specific_path)
+            .with_context(|| format!("Failed to create symlink at {} pointing to {}", version_specific_path.display(), actual_jdk_dir_name_str))?;
+        
+        Ok(self.get_java_executable(&version_specific_path))
     }
     
-    pub fn get_java_executable(&self) -> Option<PathBuf> {
+    fn get_java_executable(&self, java_symlink_path: &Path) -> PathBuf {
         match OS {
-            "linux" => self.java_path.as_ref().map(|path| path.join("bin").join("java")),
-            "macos" => self.java_path.as_ref().map(|path| path.join("Contents").join("Home").join("bin").join("java")),
-            _ => None,
+            "linux" => java_symlink_path.join("bin").join("java"),
+            "macos" => java_symlink_path.join("Contents").join("Home").join("bin").join("java"),
+            _ => panic!("Unsupported OS: {}", OS),
         }
     }
 }
