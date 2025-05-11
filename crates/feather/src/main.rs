@@ -1,24 +1,20 @@
 mod logging;
 mod modpack;
 mod cli;
+mod action;
 
-use std::{fs, process::Command};
+use std::{fs, path::PathBuf, sync::LazyLock};
 
 use anyhow::Result;
 use cli::Commands;
-use directories::{ProjectDirs, UserDirs};
 use modpack::{MinecraftProfile, Setupable};
-use subprocess::{Popen, PopenConfig};
+
+
+static JAVA_CACHE_DIR: LazyLock<PathBuf> = LazyLock::new(|| PathBuf::from("/opt/feather/java"));
+static HOME_DIR: LazyLock<PathBuf> = LazyLock::new(|| PathBuf::from("/opt/feather"));
 
 fn main() -> Result<()> {
     logging::init()?;
-
-    let project_dirs = ProjectDirs::from("", "", "feather")
-        .ok_or_else(|| anyhow::anyhow!("Failed to get project directories"))?;
-
-    let cache_dir = project_dirs.cache_dir().to_path_buf();
-    let user_dir = UserDirs::new().unwrap();
-    let home_dir = user_dir.home_dir();
 
     let cli = cli::parse();
     
@@ -26,21 +22,14 @@ fn main() -> Result<()> {
         Commands::Init(args) => {
             let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
             let profile = MinecraftProfile::try_import(&args.file)?;
-            let minecraft_dir = home_dir.join(&args.working_dir);
             
-            fs::create_dir_all(&minecraft_dir)?;
+            log::info!("Imported profile: {}", profile.snapshot());
 
-            let setup_context = runtime.block_on(profile.setup(minecraft_dir, &cache_dir))?;
+            // let minecraft_dir = HOME_DIR.join(&profile);
             
-            let output = Command::new(&setup_context.java_executable).args(["-version"]).output()?;
+            // fs::create_dir_all(&minecraft_dir)?;
 
-            log::info!("stdout: {}, stderr: {}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
-            
-            let mut minecraft_cmd = Popen::create(&[setup_context.java_executable.to_str().unwrap(), "-Xmx4G", "-jar", setup_context.minecraft_jar.to_str().unwrap(), "nogui"], PopenConfig::default())?;
-            
-            minecraft_cmd.communicate(None)?;
-
-            log::info!("stdout: {}, stderr: {}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+            // let setup_context = runtime.block_on(profile.setup(minecraft_dir, &JAVA_CACHE_DIR))?;
         }
     }
 

@@ -1,12 +1,13 @@
 mod modrinth;
 mod java;
 
-use std::{fs::File, io::Write, path::{Path, PathBuf}, str::FromStr};
+use std::{fmt, fs::File, hash::{Hash, Hasher}, io::Write, path::{Path, PathBuf}, str::FromStr};
 
 use anyhow::{anyhow, Context, Result};
 use feather_fabric::FabricClient;
-use java::{JavaManager, JavaVersion};
+use java::JavaVersion;
 use log::debug;
+use rustc_hash::FxHasher;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub use modrinth::ModrinthModpack;
@@ -35,7 +36,7 @@ fn create_eula_file(working_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Hash)]
 pub enum Modpack {
     Modrinth(ModrinthModpack),
 }
@@ -67,6 +68,28 @@ pub struct MinecraftProfile {
     pub version: Versioning,
     pub loader: Option<Loader>,
     pub modpack: Option<Modpack>,
+}
+
+impl MinecraftProfile {
+    pub fn snapshot(&self) -> String {
+        let loader = match &self.loader {
+            Some(loader) => format!("{}", loader),
+            None => "vanilla".to_string(),
+        };
+        
+        let mut state = FxHasher::default();
+        
+        let modpack = match &self.modpack {
+            Some(modpack) => {
+                modpack.hash(&mut state);
+
+                format!("{:x}", state.finish())
+            }
+            None => "none".to_string(),
+        };
+
+        format!("{}-{}-{}", self.version, loader, modpack)
+    }
 }
 
 impl MinecraftProfile {
@@ -125,8 +148,7 @@ impl Setupable for MinecraftProfile {
         
         create_eula_file(working_dir.as_ref())?;
 
-        let mut java_manager = JavaManager::new();
-        let java_executable = java_manager.ensure_java_present(
+        let java_executable = java::ensure_java_present(
             self.required_java_version(), 
             cache_dir
         ).await?;
@@ -139,13 +161,24 @@ impl Setupable for MinecraftProfile {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Hash)]
 pub enum LoaderType {
     Fabric,
     // Babric,
     // Forge,
     // Quilt,
     // NeoForge,
+}
+
+impl fmt::Display for LoaderType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", match self {
+            LoaderType::Fabric => "fabric",
+            // LoaderType::Forge => "forge",
+            // LoaderType::Quilt => "quilt",
+            // LoaderType::NeoForge => "neoforge",
+        })
+    }
 }
 
 impl FromStr for LoaderType {
@@ -163,8 +196,14 @@ impl FromStr for LoaderType {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Hash)]
 pub struct Loader {
     pub name: LoaderType,
     pub version: Versioning,
+}
+
+impl fmt::Display for Loader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }

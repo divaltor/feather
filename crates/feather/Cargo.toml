@@ -6,9 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
-directories = { workspace = true }
 indicatif = { workspace = true }
-infer = { workspace = true }
 inquire = { workspace = true }
 log = { workspace = true }
 reqwest = { workspace = true }
@@ -26,6 +24,10 @@ colored = { workspace = true }
 jiff = { workspace = true }
 flate2 = { workspace = true }
 tar = { workspace = true }
-subprocess = { workspace = true }
+sudo = { workspace = true }
+dyn-clone = { workspace = true }
+nix = { workspace = true }
+tracing = { workspace = true }
+typetag = { workspace = true }
 
 feather-fabric = { workspace = true }

@@ -1,4 +1,4 @@
-use std::{fs::File, io::BufReader, path::Path};
+use std::{fs::File, hash::{Hash, Hasher}, io::BufReader, path::Path};
 
 use anyhow::{Context, Result};
 use rustc_hash::FxHashMap;
@@ -9,26 +9,66 @@ use zip::ZipArchive;
 
 use super::{Importable, Loader, LoaderType, FromStr};
 
+#[derive(Serialize, Deserialize, Debug, Hash)]
+#[serde(rename_all = "snake_case")]
+enum EnvironmentSupport {
+    Required,
+    Optional,
+    Unsupported,
+}
+
+#[derive(Serialize, Deserialize, Debug, Hash)]
+struct MinecraftEnvironment {
+    client: EnvironmentSupport,
+    server: EnvironmentSupport,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 struct ModrinthFile {
     path: String,
     hashes: FxHashMap<String, String>,
     downloads: Vec<String>,
-    #[serde(rename = "fileSize")]
     file_size: u64,
+    env: Option<MinecraftEnvironment>
 }
 
+impl Hash for ModrinthFile {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.path.hash(state);
+        for (key, value) in self.hashes.iter() {
+            key.hash(state);
+            value.hash(state);
+        }
+        self.downloads.hash(state);
+        self.file_size.hash(state);
+    }
+}   
+
+
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ModrinthModpack {
-    #[serde(rename = "formatVersion")]
     format_version: u32,
-    #[serde(rename = "versionId")]
-    version: String,
+    version_id: String,
     name: String,
     summary: Option<String>,
     files: Vec<ModrinthFile>,
-    #[serde(rename = "dependencies")]
     dependencies: FxHashMap<String, String>,
+}
+
+impl Hash for ModrinthModpack {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.version_id.hash(state);
+        self.name.hash(state);
+        self.summary.hash(state);
+        self.files.hash(state);
+        
+        for (key, value) in self.dependencies.iter() {
+            key.hash(state);
+            value.hash(state);
+        }
+    }
 }
 
 impl ModrinthModpack {
@@ -58,7 +98,9 @@ impl ModrinthModpack {
 
 impl Importable<ModrinthModpack> for ModrinthModpack {
     fn import<P: AsRef<Path>>(path: P) -> Result<Self> {
+        // PERF: Import directly from ZIP file without extracting to temp dir
         let path = path.as_ref();
+
         let file = File::open(path)
             .with_context(|| format!("Failed to open .mrpack file: {}", path.display()))?;
         let reader = BufReader::new(file);
