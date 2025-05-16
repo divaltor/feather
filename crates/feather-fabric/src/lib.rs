@@ -11,10 +11,8 @@ use versions::Versioning;
 pub static BASE_FABRIC_URL: LazyLock<Url> =
     LazyLock::new(|| Url::parse("https://meta.fabricmc.net/v2/").unwrap());
 
-
-
 pub struct FabricClient {
-    client: Client
+    client: Client,
 }
 
 impl Default for FabricClient {
@@ -33,27 +31,39 @@ impl FabricClient {
 
         let response = self.client.get(url).send().await?;
 
-        let body = response.json::<Vec<InstallerVersion>>().await.with_context(|| "Failed to parse installer versions")?;
+        let body = response
+            .json::<Vec<InstallerVersion>>()
+            .await
+            .with_context(|| "Failed to parse installer versions")?;
 
         Ok(body)
     }
-    
+
     pub async fn download_installer_jar(
         &self,
         installer_version: &InstallerVersion,
         minecraft_version: &Versioning,
         fabric_version: &Versioning,
-        directory: &Path
+        directory: &Path,
     ) -> Result<()> {
-        debug!("Downloading installer jar for {} {} {}", minecraft_version, fabric_version, installer_version.version);
+        debug!(
+            "Downloading installer jar for {} {} {}",
+            minecraft_version, fabric_version, installer_version.version
+        );
 
-        let url = BASE_FABRIC_URL.join(&format!("versions/loader/{}/{}/{}/server/jar", minecraft_version, fabric_version, installer_version.version))?;
+        let url = BASE_FABRIC_URL.join(&format!(
+            "versions/loader/{}/{}/{}/server/jar",
+            minecraft_version, fabric_version, installer_version.version
+        ))?;
         let response = self.client.get(url).send().await?;
         let body = response.bytes().await?;
-        
-        let mut file = File::create(directory.join("fabric-server-installer.jar"))?;
-        
-        debug!("Writing installer jar to {}", directory.join("fabric-server-installer.jar").display());
+
+        let mut file = File::create(directory.join("server.jar"))?;
+
+        debug!(
+            "Writing installer jar to {}",
+            directory.join("server.jar").display()
+        );
 
         file.write_all(&body)?;
 

@@ -1,42 +1,30 @@
 mod modrinth;
-mod java;
 
-use std::{fmt, fs::File, hash::{Hash, Hasher}, io::Write, path::{Path, PathBuf}, str::FromStr};
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+    path::Path,
+    str::FromStr,
+};
 
-use anyhow::{anyhow, Context, Result};
-use feather_fabric::FabricClient;
-use java::JavaVersion;
-use log::debug;
+use anyhow::{Context, Result, anyhow};
+use compact_str::{CompactString, ToCompactString, format_compact};
 use rustc_hash::FxHasher;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 pub use modrinth::ModrinthModpack;
 use versions::Versioning;
 
+use crate::action::base::install_fabric_loader::InstallFabricLoaderAction;
+use crate::action::{Action, stateful::StatefulAction};
+
 pub trait Importable<T> {
-    fn import<P: AsRef<Path>>(path: P) -> Result<T> where T: DeserializeOwned + Sized;
+    fn import<P: AsRef<Path>>(path: P) -> Result<T>
+    where
+        T: DeserializeOwned + Sized;
 }
 
-pub struct SetupContext {
-    pub java_executable: PathBuf,
-    pub minecraft_jar: PathBuf,
-}
-
-pub trait Setupable {
-    async fn setup<T: AsRef<Path>>(&self, working_dir: T, cache_dir: &Path) -> Result<SetupContext>;
-}
-
-fn create_eula_file(working_dir: &Path) -> Result<()> {
-    debug!("Creating eula.txt file in {}", working_dir.display());
-
-    let eula_file = working_dir.join("eula.txt");
-    let mut file = File::create(eula_file)?;
-    file.write_all(b"eula=true")?;
-
-    Ok(())
-}
-
-#[derive(Serialize, Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 pub enum Modpack {
     Modrinth(ModrinthModpack),
 }
@@ -46,7 +34,7 @@ impl Modpack {
         match ModrinthModpack::import(&path) {
             Ok(modpack) => return Ok(Modpack::Modrinth(modpack)),
             Err(modrinth_error) => {
-                eprintln!("Debug: Failed to import as Modrinth: {:?}", modrinth_error);
+                tracing::error!("Debug: Failed to import as Modrinth: {:?}", modrinth_error);
 
                 Err(modrinth_error).context(format!(
                     "Attempted to import '{}' as Modrinth format failed.",
@@ -60,10 +48,9 @@ impl Modpack {
             path.as_ref().display()
         ))
     }
-    
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MinecraftProfile {
     pub version: Versioning,
     pub loader: Option<Loader>,
@@ -71,30 +58,41 @@ pub struct MinecraftProfile {
 }
 
 impl MinecraftProfile {
-    pub fn snapshot(&self) -> String {
+    pub fn snapshot(&self) -> CompactString {
         let loader = match &self.loader {
-            Some(loader) => format!("{}", loader),
-            None => "vanilla".to_string(),
+            Some(loader) => format_compact!("{}", loader),
+            None => "vanilla".to_compact_string(),
         };
-        
+
         let mut state = FxHasher::default();
-        
+
         let modpack = match &self.modpack {
             Some(modpack) => {
                 modpack.hash(&mut state);
 
-                format!("{:x}", state.finish())
+                format_compact!("{:x}", state.finish())
             }
-            None => "none".to_string(),
+            None => "none".to_compact_string(),
         };
 
-        format!("{}-{}-{}", self.version, loader, modpack)
+        format_compact!("{}-{}-{}", self.version, loader, modpack)
     }
-}
 
-impl MinecraftProfile {
+    pub fn hash(&self) -> CompactString {
+        let snapshot = self.snapshot();
+
+        let mut state = FxHasher::default();
+        snapshot.hash(&mut state);
+
+        format_compact!("{:x}", state.finish())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn try_import<T: AsRef<Path>>(file: T) -> Result<Self> {
-        debug!("Importing Minecraft profile from {}", file.as_ref().display());
+        tracing::debug!(
+            "Importing Minecraft profile from {}",
+            file.as_ref().display()
+        );
 
         match Modpack::try_import(file) {
             Ok(modpack) => match modpack {
@@ -102,66 +100,50 @@ impl MinecraftProfile {
                     let profile = MinecraftProfile {
                         version: modrinth_modpack.get_minecraft_version(),
                         loader: modrinth_modpack.get_loader(),
-                        modpack: Some(modpack)
+                        modpack: Some(modpack),
                     };
                     Ok(profile)
                 }
-            }
+            },
             Err(e) => Err(e),
         }
     }
-    
-    fn required_java_version(&self) -> JavaVersion {
-        debug!("Determining required Java version for {} version of Minecraft", self.version);
 
-        match &self.version {
-            Versioning::Ideal(v) if v.major == 1 && v.minor >= 20 && v.patch >= 5 => JavaVersion::Java21,
-            Versioning::Ideal(v) if v.major == 1 && v.minor >= 17 => JavaVersion::Java17,
-            Versioning::Ideal(v) if v.major == 1 && v.minor < 17 => JavaVersion::Java8,
-            // Probably beta version or uknown, so try Java 17. Replace with Java 21 for latest beta versions in future.
-            _ => JavaVersion::Java17,
-        }
-    }
-}
+    pub async fn plan(&self, working_dir: &Path) -> Result<Vec<StatefulAction<Box<dyn Action>>>> {
+        let mut actions: Vec<StatefulAction<Box<dyn Action>>> = Vec::new();
 
-impl Setupable for MinecraftProfile {
-    async fn setup<T: AsRef<Path>>(&self, working_dir: T, cache_dir: &Path) -> Result<SetupContext> {
         match &self.loader {
-            Some(loader) => {
-                match &loader.name {
-                    LoaderType::Fabric => {
-                        let fabric_client = FabricClient::default();
-                        let installer_versions = fabric_client.get_installer_versions().await?;
-                        let installer_version = installer_versions.first().unwrap();
-
-                        fabric_client.download_installer_jar(
-                            installer_version,
-                            &self.version,
-                            &loader.version,
-                            working_dir.as_ref()
-                        ).await?;
-                    }
+            Some(loader_info) => match &loader_info.name {
+                LoaderType::Fabric => {
+                    let fabric_action_plan = InstallFabricLoaderAction::plan(
+                        self.version.clone(),
+                        loader_info.version.clone(),
+                        working_dir.to_path_buf(),
+                    )
+                    .await
+                    .map_err(|e| {
+                        anyhow::anyhow!("Failed to manage Fabric loader installation: {:?}", e)
+                    })?;
+                    actions.push(fabric_action_plan.boxed());
                 }
+            },
+            None => {
+                // TODO: Implement Vanilla Minecraft client installation planning
+                tracing::warn!(
+                    "Vanilla Minecraft client installation is not yet planned. Minecraft version: {}",
+                    self.version
+                );
+                return Err(anyhow!(
+                    "Vanilla Minecraft client installation is not yet planned. Minecraft version: {}",
+                    self.version
+                ));
             }
-            None => panic!("No loader found"),
         }
-        
-        create_eula_file(working_dir.as_ref())?;
-
-        let java_executable = java::ensure_java_present(
-            self.required_java_version(), 
-            cache_dir
-        ).await?;
-
-        Ok(SetupContext {
-            java_executable,
-            minecraft_jar: working_dir.as_ref().join("fabric-server-installer.jar"),
-        })
+        Ok(actions)
     }
 }
 
-
-#[derive(Serialize, Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 pub enum LoaderType {
     Fabric,
     // Babric,
@@ -172,12 +154,16 @@ pub enum LoaderType {
 
 impl fmt::Display for LoaderType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            LoaderType::Fabric => "fabric",
-            // LoaderType::Forge => "forge",
-            // LoaderType::Quilt => "quilt",
-            // LoaderType::NeoForge => "neoforge",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                LoaderType::Fabric => "fabric",
+                // LoaderType::Forge => "forge",
+                // LoaderType::Quilt => "quilt",
+                // LoaderType::NeoForge => "neoforge",
+            }
+        )
     }
 }
 
@@ -195,8 +181,7 @@ impl FromStr for LoaderType {
     }
 }
 
-
-#[derive(Serialize, Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 pub struct Loader {
     pub name: LoaderType,
     pub version: Versioning,

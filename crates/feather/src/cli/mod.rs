@@ -1,5 +1,5 @@
 use std::{path::PathBuf, str::FromStr};
- 
+
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
@@ -46,7 +46,7 @@ pub struct InitArgs {
     /// [possible values: auto, system, <path>]
     #[arg(long, value_enum, env = "JAVA_HOME", default_value = "auto")]
     pub java: JavaSelection,
-    
+
     /// Provide custom Java arguments to execute the server with
     #[arg(long, default_values_t = [
         "-XX:+UseG1GC".to_string(),
@@ -74,7 +74,7 @@ pub struct InitArgs {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    #[command(name = "init")]
+    #[command(name = "init", about = "Initialize a new Feather server")]
     Init(InitArgs),
 }
 

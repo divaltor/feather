@@ -1,0 +1,29 @@
+[Unit]
+Description=Minecraft Server managed by Feather CLI
+After=network.target
+
+[Service]
+User=feather
+Nice=1
+KillMode=none
+SuccessExitStatus=0 1
+
+EnvironmentFile=/opt/feather/servers/%i/feather.env
+
+ProtectHome=true
+ProtectSystem=full
+PrivateDevices=true
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+WorkingDirectory=/opt/feather/servers/%i
+ExecStart=/bin/bash -c '${JAVA_BIN} ${JAVA_ARGS} -jar ${MINECRAFT_JAR} nogui'
+# TODO: Add stop and restart command
+# ExecStop=...
+# ExecRestart=...
+
+[Install]
+WantedBy=multi-user.target

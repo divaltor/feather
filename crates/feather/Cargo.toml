@@ -28,6 +28,16 @@ sudo = { workspace = true }
 dyn-clone = { workspace = true }
 nix = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-log = { workspace = true }
 typetag = { workspace = true }
+async-trait = { workspace = true }
+which = { workspace = true }
+strum = { workspace = true }
+compact_str = { workspace = true }
+smallvec = { workspace = true }
 
 feather-fabric = { workspace = true }
+
+[target.'cfg(all(not(target_os = "windows"), not(target_os = "openbsd"), not(target_os = "aix"), not(target_os = "android"), any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "powerpc64")))'.dependencies]
+tikv-jemallocator = { workspace = true }

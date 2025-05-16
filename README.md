@@ -1,0 +1,1 @@
+Highly inspired from Determinate Nix Installer
