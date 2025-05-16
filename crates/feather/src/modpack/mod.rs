@@ -90,6 +90,10 @@ impl MinecraftProfile {
 
         format!("{}-{}-{}", self.version, loader, modpack)
     }
+    
+    pub fn username(&self) -> String {
+        format!("feather-{}", self.snapshot().replace(".", "-"))
+    }
 }
 
 impl MinecraftProfile {

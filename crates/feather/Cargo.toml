@@ -14,7 +14,7 @@ rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
-thiserror = { workspace = true }
+thiserror.workspace = true
 tokio = { workspace = true }
 toml = { workspace = true }
 versions = { workspace = true }
@@ -26,8 +26,11 @@ flate2 = { workspace = true }
 tar = { workspace = true }
 sudo = { workspace = true }
 dyn-clone = { workspace = true }
-nix = { workspace = true }
+nix.workspace = true
 tracing = { workspace = true }
 typetag = { workspace = true }
+async-trait = { workspace = true }
+which = { workspace = true }
+strum = { workspace = true }
 
 feather-fabric = { workspace = true }

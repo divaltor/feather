@@ -3,11 +3,12 @@ mod modpack;
 mod cli;
 mod action;
 
-use std::{fs, path::PathBuf, sync::LazyLock};
+use std::{path::PathBuf, sync::LazyLock};
 
+use action::base::CreateUser;
 use anyhow::Result;
 use cli::Commands;
-use modpack::{MinecraftProfile, Setupable};
+use modpack::MinecraftProfile;
 
 
 static JAVA_CACHE_DIR: LazyLock<PathBuf> = LazyLock::new(|| PathBuf::from("/opt/feather/java"));
@@ -23,8 +24,13 @@ fn main() -> Result<()> {
             let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
             let profile = MinecraftProfile::try_import(&args.file)?;
             
-            log::info!("Imported profile: {}", profile.snapshot());
-
+            let snapshot = profile.snapshot();
+            
+            log::info!("Imported profile: {}", snapshot);
+            
+            let user = CreateUser::plan(profile.username())?;
+            
+            runtime.block_on(user.boxed().try_execute())?;
             // let minecraft_dir = HOME_DIR.join(&profile);
             
             // fs::create_dir_all(&minecraft_dir)?;
