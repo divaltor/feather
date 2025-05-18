@@ -139,11 +139,11 @@ jobs:
         run: |
           BUILD_COMMAND_PREFIX=""
           if [[ "${{ matrix.use_cross }}" == "true" ]]; then
-            BUILD_COMMAND_PREFIX="cargo zigbuild"
+            BUILD_COMMAND_PREFIX="cargo-zigbuild"
           else
-            BUILD_COMMAND_PREFIX="cargo build"
+            BUILD_COMMAND_PREFIX="cargo"
           fi
-          $BUILD_COMMAND_PREFIX --release --target ${{ matrix.target }}
+          $BUILD_COMMAND_PREFIX build --release --target ${{ matrix.target }}
 
       - name: Prepare artifact file name
         id: artifact_details
