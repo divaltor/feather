@@ -120,7 +120,6 @@ jobs:
           target: ${{ matrix.target }} 
 
       - name: Install cross-rs/cross
-        if: matrix.use_cross == 'true'
         uses: taiki-e/install-action@v2
         with:
           tool: cross
