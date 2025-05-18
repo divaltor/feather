@@ -116,11 +116,11 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }} 
 
-      - name: Install cross-rs/cross
+      - name: Install cargo-zigbuild
         if: matrix.use_cross == 'true'
         uses: taiki-e/install-action@v2
         with:
-          tool: cross
+          tool: cargo-zigbuild
 
       - name: Cache Cargo
         uses: actions/cache@v4
@@ -139,7 +139,7 @@ jobs:
         run: |
           BUILD_COMMAND_PREFIX=""
           if [[ "${{ matrix.use_cross }}" == "true" ]]; then
-            BUILD_COMMAND_PREFIX="cross"
+            BUILD_COMMAND_PREFIX="cargo-zigbuild"
           else
             BUILD_COMMAND_PREFIX="cargo"
           fi
