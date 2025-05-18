@@ -1,0 +1,177 @@
+name: Build Artifacts
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*.*.*'
+
+env:
+  BINARY_NAME: feather
+
+permissions:
+  contents: read
+
+jobs:
+  determine_version_info:
+    name: Determine Version Info
+    runs-on: ubuntu-latest
+    outputs:
+      version_name: ${{ steps.get_version.outputs.version_name }}
+      version_tag: ${{ steps.get_version.outputs.version_tag }}
+      is_prerelease: ${{ steps.get_version.outputs.is_prerelease }}
+      is_release_event: ${{ steps.get_version.outputs.is_release_event }}
+      is_nightly_event: ${{ steps.get_version.outputs.is_nightly_event }}
+      yyyymmdd: ${{ steps.date.outputs.yyyymmdd }}
+      short_sha: ${{ steps.sha.outputs.short_sha }}
+    steps:
+      - name: Get short SHA
+        id: sha
+        run: echo "short_sha=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
+      - name: Get date
+        id: date
+        run: echo "yyyymmdd=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+      - name: Determine Version Information
+        id: get_version
+        run: |
+          IS_RELEASE_EVENT="false"
+          IS_NIGHTLY_EVENT="false"
+          VERSION_NAME=""
+          VERSION_TAG=""
+          IS_PRERELEASE="false"
+
+          if [[ "${{ github.event_name }}" == "push" && ("${{ github.ref_name }}" == "main" || "${{ github.ref_name }}" == "master") && "${{ github.ref_type }}" == "branch" ]]; then
+            IS_NIGHTLY_EVENT="true"
+            VERSION_NAME="nightly-${{ steps.date.outputs.yyyymmdd }}-${{ steps.sha.outputs.short_sha }}"
+            VERSION_TAG="nightly-${{ steps.date.outputs.yyyymmdd }}"
+            IS_PRERELEASE="true"
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" && "${{ github.ref_name }}" == v* ]]; then
+            IS_RELEASE_EVENT="true"
+            VERSION_NAME="${{ github.ref_name }}"
+            VERSION_TAG="${{ github.ref_name }}"
+            IS_PRERELEASE="false"
+          else
+            VERSION_NAME="dev-build-${{ steps.sha.outputs.short_sha }}"
+            echo "::warning::Not a primary release trigger. Version Name for artifacts: $VERSION_NAME"
+          fi
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "is_release_event=$IS_RELEASE_EVENT" >> $GITHUB_OUTPUT
+          echo "is_nightly_event=$IS_NIGHTLY_EVENT" >> $GITHUB_OUTPUT
+
+      - name: Save version info to file
+        run: |
+          echo "{\"version_name\":\"${{ steps.get_version.outputs.version_name }}\", \"version_tag\":\"${{ steps.get_version.outputs.version_tag }}\", \"is_prerelease\":\"${{ steps.get_version.outputs.is_prerelease }}\", \"is_release_event\":\"${{ steps.get_version.outputs.is_release_event }}\", \"is_nightly_event\":\"${{ steps.get_version.outputs.is_nightly_event }}\", \"yyyymmdd\":\"${{ steps.date.outputs.yyyymmdd }}\", \"short_sha\":\"${{ steps.sha.outputs.short_sha }}\"}" > version_info.json
+          cat version_info.json
+      
+      - name: Upload version info artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-info
+          path: version_info.json
+
+  build_and_package:
+    name: Build for ${{ matrix.target }}
+    needs: determine_version_info
+    if: needs.determine_version_info.outputs.version_name != ''
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-13 
+            use_cross: false
+            asset_ext: zip
+          - target: aarch64-apple-darwin
+            os: macos-14
+            use_cross: false
+            asset_ext: zip
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: false
+            asset_ext: tar.gz
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            use_cross: true
+            asset_ext: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: true
+            asset_ext: tar.gz
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            use_cross: true
+            asset_ext: tar.gz
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }} 
+
+      - name: Install cross-rs/cross
+        if: matrix.use_cross == 'true'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      - name: Build binary
+        run: |
+          BUILD_COMMAND_PREFIX=""
+          if [[ "${{ matrix.use_cross }}" == "true" ]]; then
+            BUILD_COMMAND_PREFIX="cross"
+          else
+            BUILD_COMMAND_PREFIX="cargo"
+          fi
+          $BUILD_COMMAND_PREFIX build --release --target ${{ matrix.target }}
+
+      - name: Prepare artifact file name
+        id: artifact_details
+        run: |
+          asset_filename="${{ env.BINARY_NAME }}-${{ needs.determine_version_info.outputs.version_name }}-${{ matrix.target }}.${{ matrix.asset_ext }}"
+          echo "asset_filename=$asset_filename" >> $GITHUB_OUTPUT
+
+      - name: Package binary
+        shell: bash
+        run: |
+          BINARY_PATH_PREFIX="target/${{ matrix.target }}/release"
+          FINAL_ASSET_PATH="${{ steps.artifact_details.outputs.asset_filename }}"
+          
+          if [[ ! -f "$BINARY_PATH_PREFIX/${{ env.BINARY_NAME }}" ]]; then
+            echo "Error: Binary not found at $BINARY_PATH_PREFIX/${{ env.BINARY_NAME }}"
+            ls -R "$BINARY_PATH_PREFIX"
+            exit 1
+          fi
+
+          if [[ "${{ matrix.asset_ext }}" == "zip" ]]; then
+            (cd "$BINARY_PATH_PREFIX" && zip "../../${FINAL_ASSET_PATH}" "${{ env.BINARY_NAME }}")
+          else # tar.gz
+            tar czvf "${FINAL_ASSET_PATH}" -C "$BINARY_PATH_PREFIX" "${{ env.BINARY_NAME }}"
+          fi
+          echo "Packaged to ${FINAL_ASSET_PATH}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-${{ matrix.target }} 
+          path: ${{ steps.artifact_details.outputs.asset_filename }} 

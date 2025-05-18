@@ -1,0 +1,109 @@
+name: Create Release
+
+on:
+  workflow_run:
+    workflows: ["Build Artifacts"]
+    types:
+      - completed
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  TRIGGERING_WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  prepare_release_data:
+    name: Prepare Release Data
+    runs-on: ubuntu-latest
+    outputs:
+      version_name: ${{ steps.load_version_info.outputs.version_name }}
+      version_tag: ${{ steps.load_version_info.outputs.version_tag }}
+      is_prerelease: ${{ steps.load_version_info.outputs.is_prerelease }}
+      is_release_event: ${{ steps.load_version_info.outputs.is_release_event }}
+      is_nightly_event: ${{ steps.load_version_info.outputs.is_nightly_event }}
+      yyyymmdd: ${{ steps.load_version_info.outputs.yyyymmdd }}
+      short_sha: ${{ steps.load_version_info.outputs.short_sha }}
+      run_id: ${{ github.event.workflow_run.id }}
+    steps:
+      - name: Download version-info artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: version-info
+          path: .
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          
+      - name: Load version info from file
+        id: load_version_info
+        run: |
+          cat version_info.json
+          echo "version_name=$(jq -r .version_name version_info.json)" >> $GITHUB_OUTPUT
+          echo "version_tag=$(jq -r .version_tag version_info.json)" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$(jq -r .is_prerelease version_info.json)" >> $GITHUB_OUTPUT
+          echo "is_release_event=$(jq -r .is_release_event version_info.json)" >> $GITHUB_OUTPUT
+          echo "is_nightly_event=$(jq -r .is_nightly_event version_info.json)" >> $GITHUB_OUTPUT
+          echo "yyyymmdd=$(jq -r .yyyymmdd version_info.json)" >> $GITHUB_OUTPUT
+          echo "short_sha=$(jq -r .short_sha version_info.json)" >> $GITHUB_OUTPUT
+
+  create_nightly_prerelease:
+    name: Create Nightly Pre-release
+    needs: prepare_release_data
+    if: github.event.workflow_run.conclusion == 'success' && needs.prepare_release_data.outputs.is_nightly_event == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: nightly-release-${{ needs.prepare_release_data.outputs.version_tag }}
+      cancel-in-progress: true
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded_artifacts
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ needs.prepare_release_data.outputs.run_id }} 
+          
+      - name: List downloaded files
+        run: ls -R downloaded_artifacts
+
+      - name: Create or Update Nightly Pre-release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "downloaded_artifacts/*/*"
+          tag: ${{ needs.prepare_release_data.outputs.version_tag }}
+          name: "Nightly Build ${{ needs.prepare_release_data.outputs.version_name }}"
+          body: "Automated nightly pre-release for ${{ needs.prepare_release_data.outputs.yyyymmdd }}. Commit: ${{ github.server_url}}/${{ github.repository }}/commit/${{ env.TRIGGERING_WORKFLOW_SHA }}"
+          prerelease: true
+          allowUpdates: true 
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit: ${{ env.TRIGGERING_WORKFLOW_SHA }}
+
+  create_release:
+    name: Create Release
+    needs: prepare_release_data
+    if: github.event.workflow_run.conclusion == 'success' && needs.prepare_release_data.outputs.is_release_event == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded_artifacts
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ needs.prepare_release_data.outputs.run_id }}
+
+      - name: List downloaded files
+        run: ls -R downloaded_artifacts
+        
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "downloaded_artifacts/*/*"
+          tag: ${{ needs.prepare_release_data.outputs.version_tag }} 
+          name: "Release ${{ needs.prepare_release_data.outputs.version_name }}"
+          body: |
+            Official release for version ${{ needs.prepare_release_data.outputs.version_name }}.
+            See CHANGELOG.md for details. (You might want to create this file)
+            Commit: ${{ github.server_url}}/${{ github.repository }}/commit/${{ env.TRIGGERING_WORKFLOW_SHA }}
+          prerelease: needs.prepare_release_data.outputs.is_prerelease == 'true'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit: ${{ env.TRIGGERING_WORKFLOW_SHA }}
