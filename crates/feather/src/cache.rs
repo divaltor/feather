@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{action::base::install_java::JavaVersion, cli::InitArgs};
+use crate::action::base::install_java::JavaVersion;
 use versions::Versioning;
 
 #[derive(Debug, Clone)]

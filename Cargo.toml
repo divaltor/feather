@@ -3,7 +3,6 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
-name = "feather"
 description = "CLI tool for managing Minecraft servers"
 version = "0.1.0"
 edition = "2024"

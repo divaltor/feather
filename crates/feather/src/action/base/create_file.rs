@@ -1,9 +1,6 @@
 use compact_str::CompactString;
 use nix::unistd::{Group, User};
-use std::{
-    os::unix::fs::{PermissionsExt, chown},
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
 
 use crate::action::{Action, ActionErrorKind, StatefulAction};

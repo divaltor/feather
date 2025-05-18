@@ -10,7 +10,7 @@ use flate2::bufread::GzDecoder;
 use rustc_hash::FxHasher;
 use std::hash::Hasher;
 use std::os::unix::fs::symlink;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::{fs, os::unix::fs::chown};
 use tar::Archive;
 

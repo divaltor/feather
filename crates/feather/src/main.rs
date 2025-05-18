@@ -9,7 +9,6 @@ use std::{path::PathBuf, sync::LazyLock};
 
 use anyhow::Result;
 use cli::Commands;
-use compact_str::ToCompactString;
 use plan::ServerSetupManager;
 
 #[cfg(all(
