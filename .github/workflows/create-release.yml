@@ -75,6 +75,7 @@ jobs:
           body: "Automated nightly pre-release for ${{ needs.prepare_release_data.outputs.yyyymmdd }}. Commit: ${{ github.server_url}}/${{ github.repository }}/commit/${{ env.TRIGGERING_WORKFLOW_SHA }}"
           prerelease: true
           allowUpdates: true 
+          removeArtifacts: true
           token: ${{ secrets.GITHUB_TOKEN }}
           commit: ${{ env.TRIGGERING_WORKFLOW_SHA }}
 
