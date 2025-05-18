@@ -2,6 +2,7 @@ use crate::action::Action;
 use crate::action::base::configure_systemd::ConfigureSystemdService;
 use crate::action::base::create_directory::CreateDirectory;
 use crate::action::base::create_user::CreateUser;
+use crate::action::base::start_systemd::StartSystemd;
 use crate::action::stateful::{ActionErrorKind, StatefulAction};
 use crate::cache::CacheManager;
 use crate::cli;

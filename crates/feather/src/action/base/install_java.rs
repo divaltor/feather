@@ -8,10 +8,10 @@ use versions::Versioning;
 use anyhow::{Context, Result as AnyhowResult, anyhow};
 use flate2::bufread::GzDecoder;
 use rustc_hash::FxHasher;
-use std::fs;
 use std::hash::Hasher;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
+use std::{fs, os::unix::fs::chown};
 use tar::Archive;
 
 #[derive(Debug, Clone)]
@@ -193,6 +193,9 @@ impl InstallJava {
                 jdk_subdirectory_path.display()
             )
         })?;
+
+        // FIXME: Man it's fuckin ridicolous that we have to do this
+        chown(&version_specific_path, Some(1000), Some(1000))?;
 
         Ok(self.cache_manager.get_java_executable(&java_version))
     }

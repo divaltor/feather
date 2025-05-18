@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::path::PathBuf;
+use std::{os::unix::fs::chown, path::PathBuf};
 use tokio::io::AsyncWriteExt;
 
 use crate::action::{
@@ -77,9 +77,13 @@ impl Action for CreateFeatherEnvAction {
         let mut file = tokio::fs::File::create(&env_file_path)
             .await
             .map_err(|e| ActionErrorKind::Write(env_file_path.clone(), e))?;
+
         file.write_all(content.as_bytes())
             .await
             .map_err(|e| ActionErrorKind::Write(env_file_path.clone(), e))?;
+
+        // FIXME: Man it's fuckin ridicolous that we have to do this
+        chown(&env_file_path, Some(1000), Some(1000))?;
 
         tracing::info!("Created feather.env in {}", self.working_dir.display());
         Ok(())

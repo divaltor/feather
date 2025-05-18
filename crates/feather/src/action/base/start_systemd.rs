@@ -9,14 +9,14 @@ use crate::action::{
 use super::check_systemd_exists;
 
 #[derive(Debug, Clone)]
-struct StartSystemd {
+pub struct StartSystemd {
     unit: String,
     enable: bool,
 }
 
 impl StartSystemd {
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn plan(
+    pub async fn plan(
         name: impl AsRef<str>,
         enable: bool,
     ) -> Result<StatefulAction<Self>, ActionErrorKind> {
