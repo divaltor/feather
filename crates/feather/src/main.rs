@@ -1,29 +1,17 @@
-mod action;
-pub mod cache;
 mod cli;
+mod config;
+mod installer;
+mod java;
 mod logging;
+mod minecraft;
 mod modpack;
-pub mod plan;
 
 use std::{path::PathBuf, sync::LazyLock};
 
 use anyhow::Result;
 use cli::Commands;
-use plan::ServerSetupManager;
-
-#[cfg(all(
-    not(target_os = "windows"),
-    not(target_os = "openbsd"),
-    not(target_os = "aix"),
-    not(target_os = "android"),
-    any(
-        target_arch = "x86_64",
-        target_arch = "aarch64",
-        target_arch = "powerpc64"
-    )
-))]
-#[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+use installer::MinecraftServerInstaller;
+use modpack::MinecraftProfile;
 
 static JAVA_CACHE_DIR: LazyLock<PathBuf> = LazyLock::new(|| PathBuf::from("/opt/feather/java"));
 static HOME_DIR: LazyLock<PathBuf> = LazyLock::new(|| PathBuf::from("/opt/feather"));
@@ -42,16 +30,16 @@ fn main() -> Result<()> {
                 .unwrap();
 
             runtime.block_on(async {
-                let mut manager = ServerSetupManager::new(
+                let profile = MinecraftProfile::try_import(&args.file)?;
+
+                let installer = MinecraftServerInstaller::new(
+                    profile,
                     &args,
                     &JAVA_CACHE_DIR,
                     &MINECRAFT_SERVERS_DIR,
-                ).await?;
+                );
 
-                if let Err(e) = manager.install().await {
-                    tracing::error!("Server setup failed: {:?}", e);
-                    return Err(anyhow::anyhow!("Server setup failed: {:?}", e));
-                }
+                installer.install().await?;
 
                 tracing::info!(
                     "Feather server initialization for modpack '{}' finished successfully.",
@@ -66,7 +54,7 @@ fn main() -> Result<()> {
                     "inside the server's directory, then use systemd commands (if configured) to manage the server."
                 );
 
-                Ok(())
+                Ok::<(), anyhow::Error>(())
             })?;
         }
     }

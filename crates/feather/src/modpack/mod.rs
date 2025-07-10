@@ -8,15 +8,12 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use compact_str::{CompactString, ToCompactString, format_compact};
+
 use rustc_hash::FxHasher;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 pub use modrinth::ModrinthModpack;
 use versions::Versioning;
-
-use crate::action::base::install_fabric_loader::InstallFabricLoaderAction;
-use crate::action::{Action, stateful::StatefulAction};
 
 pub trait Importable<T> {
     fn import<P: AsRef<Path>>(path: P) -> Result<T>
@@ -58,10 +55,10 @@ pub struct MinecraftProfile {
 }
 
 impl MinecraftProfile {
-    pub fn snapshot(&self) -> CompactString {
+    pub fn snapshot(&self) -> String {
         let loader = match &self.loader {
-            Some(loader) => format_compact!("{}", loader),
-            None => "vanilla".to_compact_string(),
+            Some(loader) => format!("{}", loader),
+            None => "vanilla".to_string(),
         };
 
         let mut state = FxHasher::default();
@@ -69,22 +66,21 @@ impl MinecraftProfile {
         let modpack = match &self.modpack {
             Some(modpack) => {
                 modpack.hash(&mut state);
-
-                format_compact!("{:x}", state.finish())
+                format!("{:x}", state.finish())
             }
-            None => "none".to_compact_string(),
+            None => "none".to_string(),
         };
 
-        format_compact!("{}-{}-{}", self.version, loader, modpack)
+        format!("{}-{}-{}", self.version, loader, modpack)
     }
 
-    pub fn hash(&self) -> CompactString {
+    pub fn hash(&self) -> String {
         let snapshot = self.snapshot();
 
         let mut state = FxHasher::default();
         snapshot.hash(&mut state);
 
-        format_compact!("{:x}", state.finish())
+        format!("{:x}", state.finish())
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -107,39 +103,6 @@ impl MinecraftProfile {
             },
             Err(e) => Err(e),
         }
-    }
-
-    pub async fn plan(&self, working_dir: &Path) -> Result<Vec<StatefulAction<Box<dyn Action>>>> {
-        let mut actions: Vec<StatefulAction<Box<dyn Action>>> = Vec::new();
-
-        match &self.loader {
-            Some(loader_info) => match &loader_info.name {
-                LoaderType::Fabric => {
-                    let fabric_action_plan = InstallFabricLoaderAction::plan(
-                        self.version.clone(),
-                        loader_info.version.clone(),
-                        working_dir.to_path_buf(),
-                    )
-                    .await
-                    .map_err(|e| {
-                        anyhow::anyhow!("Failed to manage Fabric loader installation: {:?}", e)
-                    })?;
-                    actions.push(fabric_action_plan.boxed());
-                }
-            },
-            None => {
-                // TODO: Implement Vanilla Minecraft client installation planning
-                tracing::warn!(
-                    "Vanilla Minecraft client installation is not yet planned. Minecraft version: {}",
-                    self.version
-                );
-                return Err(anyhow!(
-                    "Vanilla Minecraft client installation is not yet planned. Minecraft version: {}",
-                    self.version
-                ));
-            }
-        }
-        Ok(actions)
     }
 }
 

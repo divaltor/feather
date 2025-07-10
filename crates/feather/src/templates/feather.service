@@ -1,0 +1,16 @@
+[Unit]
+Description=Feather Minecraft Server
+After=network.target
+
+[Service]
+Type=simple
+User=feather
+Group=feather
+WorkingDirectory=/opt/feather/servers
+EnvironmentFile=/opt/feather/servers/feather.env
+ExecStart=/bin/bash -c '${JAVA_EXECUTABLE} ${JAVA_ARGS} -jar ${SERVER_JAR} nogui'
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

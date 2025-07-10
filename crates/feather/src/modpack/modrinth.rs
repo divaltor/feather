@@ -6,10 +6,8 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use compact_str::CompactString;
-use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
+use std::collections::HashMap;
 use tempfile::tempdir;
 use versions::Versioning;
 use zip::ZipArchive;
@@ -25,20 +23,19 @@ enum EnvironmentSupport {
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone)]
-struct MinecraftEnvironment {
+pub struct MinecraftEnvironment {
     client: EnvironmentSupport,
     server: EnvironmentSupport,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-struct ModrinthFile {
-    path: String,
-    hashes: FxHashMap<CompactString, String>,
-    // Usually Modrinth only has one download value
-    downloads: SmallVec<[String; 1]>,
-    file_size: u64,
-    env: Option<MinecraftEnvironment>,
+pub struct ModrinthFile {
+    pub path: String,
+    pub hashes: HashMap<String, String>,
+    pub downloads: Option<Vec<String>>,
+    pub file_size: u64,
+    pub env: Option<MinecraftEnvironment>,
 }
 
 impl Hash for ModrinthFile {
@@ -48,7 +45,9 @@ impl Hash for ModrinthFile {
             key.hash(state);
             value.hash(state);
         }
-        self.downloads.hash(state);
+        if let Some(downloads) = &self.downloads {
+            downloads.hash(state);
+        }
         self.file_size.hash(state);
     }
 }
@@ -56,12 +55,12 @@ impl Hash for ModrinthFile {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ModrinthModpack {
-    format_version: u32,
-    version_id: CompactString,
-    name: CompactString,
-    summary: Option<CompactString>,
-    files: Vec<ModrinthFile>,
-    dependencies: FxHashMap<CompactString, CompactString>,
+    pub format_version: u32,
+    pub version_id: String,
+    pub name: String,
+    pub summary: Option<String>,
+    pub files: Vec<ModrinthFile>,
+    pub dependencies: HashMap<String, String>,
 }
 
 impl Hash for ModrinthModpack {
