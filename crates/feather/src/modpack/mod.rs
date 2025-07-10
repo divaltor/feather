@@ -57,7 +57,7 @@ pub struct MinecraftProfile {
 impl MinecraftProfile {
     pub fn snapshot(&self) -> String {
         let loader = match &self.loader {
-            Some(loader) => format!("{}", loader),
+            Some(loader) => format!("{loader}"),
             None => "vanilla".to_string(),
         };
 

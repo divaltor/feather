@@ -88,7 +88,7 @@ impl MinecraftServerInstaller {
         if !output.status.success() {
             tracing::info!("Creating feather user...");
             let status = std::process::Command::new("sudo")
-                .args(&["useradd", "-r", "-s", "/bin/false", "feather"])
+                .args(["useradd", "-r", "-s", "/bin/false", "feather"])
                 .status()
                 .context("Failed to create feather user")?;
 
@@ -136,10 +136,10 @@ impl MinecraftServerInstaller {
         let service_path = "/etc/systemd/system/feather.service";
 
         std::fs::write(service_path, service_content)
-            .with_context(|| format!("Failed to write systemd service file: {}", service_path))?;
+            .with_context(|| format!("Failed to write systemd service file: {service_path}"))?;
 
         let status = std::process::Command::new("sudo")
-            .args(&["systemctl", "daemon-reload"])
+            .args(["systemctl", "daemon-reload"])
             .status()
             .context("Failed to reload systemd daemon")?;
 

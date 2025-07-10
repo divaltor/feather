@@ -67,7 +67,7 @@ impl JavaInstaller {
                 .join("Home")
                 .join("bin")
                 .join("java"),
-            _ => panic!("Unsupported OS: {}", OS),
+            _ => panic!("Unsupported OS: {OS}"),
         }
     }
 
@@ -111,15 +111,14 @@ impl JavaInstaller {
         };
 
         let url = format!(
-            "https://api.adoptium.net/v3/binary/latest/{}/ga/{}/{}/jdk/hotspot/normal/eclipse",
-            java_version, os_str, ARCH
+            "https://api.adoptium.net/v3/binary/latest/{java_version}/ga/{os_str}/{ARCH}/jdk/hotspot/normal/eclipse"
         );
 
         tracing::debug!("Downloading Java from: {}", url);
 
         let response = reqwest::get(&url)
             .await
-            .with_context(|| format!("Failed to download Java from {}", url))?;
+            .with_context(|| format!("Failed to download Java from {url}"))?;
 
         if !response.status().is_success() {
             return Err(anyhow!(
@@ -141,7 +140,7 @@ impl JavaInstaller {
         hasher.write(&body);
         let hash = hasher.finish();
 
-        let dir_name = format!("{:x}", hash);
+        let dir_name = format!("{hash:x}");
         let jdk_install_path = self.cache_dir.join(&dir_name);
 
         std::fs::create_dir_all(&self.cache_dir).with_context(|| {
@@ -153,7 +152,7 @@ impl JavaInstaller {
 
         archive
             .unpack(&jdk_install_path)
-            .with_context(|| format!("Failed to unpack Java to {}", jdk_install_path.display()))?;
+            .with_context(|| format!("Failed to unpack Java to {jdk_install_path:?}"))?;
 
         let mut entries = std::fs::read_dir(&jdk_install_path).with_context(|| {
             format!(

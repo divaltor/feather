@@ -47,10 +47,7 @@ impl MinecraftInstaller {
         tracing::debug!("Downloading Fabric server from: {}", fabric_installer_url);
 
         let response = reqwest::get(&fabric_installer_url).await.with_context(|| {
-            format!(
-                "Failed to download Fabric server from {}",
-                fabric_installer_url
-            )
+            format!("Failed to download Fabric server from {fabric_installer_url}")
         })?;
 
         if !response.status().is_success() {
@@ -102,44 +99,44 @@ impl MinecraftInstaller {
             .await
             .with_context(|| format!("Failed to create mods directory: {}", mods_dir.display()))?;
 
-        for file in &modpack.files {
-            if let Some(downloads) = &file.downloads {
-                if let Some(download_url) = downloads.first() {
-                    tracing::debug!("Downloading mod: {} from {}", file.path, download_url);
+        // for file in &modpack.files {
+        //     if let Some(downloads) = &file.downloads {
+        //         if let Some(download_url) = downloads.first() {
+        //             tracing::debug!("Downloading mod: {} from {}", file.path, download_url);
 
-                    let response = reqwest::get(download_url)
-                        .await
-                        .with_context(|| format!("Failed to download mod from {}", download_url))?;
+        //             let response = reqwest::get(download_url)
+        //                 .await
+        //                 .with_context(|| format!("Failed to download mod from {download_url}"))?;
 
-                    if !response.status().is_success() {
-                        tracing::warn!(
-                            "Failed to download mod {}: HTTP {}",
-                            file.path,
-                            response.status()
-                        );
-                        continue;
-                    }
+        //             if !response.status().is_success() {
+        //                 tracing::warn!(
+        //                     "Failed to download mod {}: HTTP {}",
+        //                     file.path,
+        //                     response.status()
+        //                 );
+        //                 continue;
+        //             }
 
-                    let mod_path = mods_dir.join(&file.path);
-                    if let Some(parent) = mod_path.parent() {
-                        tokio::fs::create_dir_all(parent).await.with_context(|| {
-                            format!("Failed to create mod directory: {}", parent.display())
-                        })?;
-                    }
+        //             let mod_path = mods_dir.join(&file.path);
+        //             if let Some(parent) = mod_path.parent() {
+        //                 tokio::fs::create_dir_all(parent).await.with_context(|| {
+        //                     format!("Failed to create mod directory: {}", parent.display())
+        //                 })?;
+        //             }
 
-                    let bytes = response
-                        .bytes()
-                        .await
-                        .context("Failed to read mod file response")?;
+        //             let bytes = response
+        //                 .bytes()
+        //                 .await
+        //                 .context("Failed to read mod file response")?;
 
-                    tokio::fs::write(&mod_path, bytes).await.with_context(|| {
-                        format!("Failed to write mod file: {}", mod_path.display())
-                    })?;
+        //             tokio::fs::write(&mod_path, bytes).await.with_context(|| {
+        //                 format!("Failed to write mod file: {}", mod_path.display())
+        //             })?;
 
-                    tracing::debug!("Downloaded mod: {}", file.path);
-                }
-            }
-        }
+        //             tracing::debug!("Downloaded mod: {}", file.path);
+        //         }
+        //     }
+        // }
 
         tracing::info!("Modrinth modpack installed successfully");
         Ok(())
