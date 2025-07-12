@@ -24,7 +24,7 @@ pub fn init() -> Result<(), fern::InitError> {
                     message
                 ));
             }
-            Level::Info | Level::Debug | Level::Trace => {
+            Level::Info | Level::Debug => {
                 out.finish(format_args!(
                     "{}[{}][{}] {}",
                     jiff::Zoned::now().strftime("[%Y-%m-%d][%H:%M:%S]"),
@@ -32,6 +32,9 @@ pub fn init() -> Result<(), fern::InitError> {
                     record.level(),
                     message
                 ));
+            }
+            Level::Trace => {
+                // TRACE level is excluded by default
             }
         })
         .level(log::LevelFilter::Debug)
