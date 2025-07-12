@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::str::FromStr;
 
 use clap::{Args, Parser, Subcommand};
 
@@ -15,7 +15,6 @@ pub enum JavaSelection {
     #[default]
     Auto,
     System,
-    Custom(PathBuf),
 }
 
 impl FromStr for JavaSelection {
@@ -25,7 +24,7 @@ impl FromStr for JavaSelection {
         Ok(match s {
             "auto" => JavaSelection::Auto,
             "system" => JavaSelection::System,
-            path => JavaSelection::Custom(PathBuf::from(path)),
+            _ => anyhow::bail!("Invalid Java selection"),
         })
     }
 }
