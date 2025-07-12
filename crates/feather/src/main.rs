@@ -18,7 +18,7 @@ static HOME_DIR: LazyLock<PathBuf> = LazyLock::new(|| PathBuf::from("/opt/feathe
 static MINECRAFT_SERVERS_DIR: LazyLock<PathBuf> = LazyLock::new(|| HOME_DIR.join("servers"));
 
 fn main() -> Result<()> {
-    logging::init()?;
+    logging::init().unwrap();
 
     let cli = cli::parse();
 

@@ -37,7 +37,6 @@ versions = { version = "7.0.0", features = ["serde"] }
 zip = "3.0.0"
 futures-core = "0.3.31"
 bytes = "1.10.1"
-fern = "0.7.1"
 colored = "3.0.0"
 jiff = "0.2.12"
 flate2 = { version = "1.1.1", default-features = false, features = ["zlib-rs"] }
@@ -53,6 +52,7 @@ tracing-subscriber = { version = "0.3.19", default-features = false, features = 
     "ansi",
     "smallvec",
     "chrono",
+    "registry",
 ] }
 typetag = "0.2.20"
 async-trait = { version = "0.1.88", default-features = false }

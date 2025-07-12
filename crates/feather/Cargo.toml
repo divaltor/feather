@@ -13,7 +13,6 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
 versions = { workspace = true }
-fern = { workspace = true }
 colored = { workspace = true }
 jiff = { workspace = true }
 flate2 = { workspace = true }
@@ -26,5 +25,3 @@ zip = { workspace = true }
 log = { workspace = true }
 
 feather-fabric = { workspace = true }
-
-

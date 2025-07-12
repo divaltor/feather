@@ -12,4 +12,3 @@ versions = { workspace = true }
 futures-core = { workspace = true }
 bytes = { workspace = true }
 log = { workspace = true }
-fern = { workspace = true }
