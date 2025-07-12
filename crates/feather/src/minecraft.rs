@@ -117,12 +117,11 @@ impl MinecraftInstaller {
                         continue;
                     }
 
-                    let mod_path = mods_dir.join(&file.path);
-                    if let Some(parent) = mod_path.parent() {
-                        tokio::fs::create_dir_all(parent).await.with_context(|| {
-                            format!("Failed to create mod directory: {}", parent.display())
-                        })?;
-                    }
+                    let mod_filename = std::path::Path::new(&file.path)
+                        .file_name()
+                        .with_context(|| format!("Invalid mod file path: {}", file.path))?;
+
+                    let mod_path = mods_dir.join(mod_filename);
 
                     let bytes = response
                         .bytes()
